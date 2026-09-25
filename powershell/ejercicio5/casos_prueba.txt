@@ -25,3 +25,7 @@ Comandos a ejecutar:
 ./ejercicio5 -film "1,2,3, ,4"
 
 ./ejercicio5 -film "1,4,6,7,2,-1,5,3,5"
+
+./ejercicio5 -people "1,54,12,45,63" -film "1,6,3,2"
+
+./ejercicio5 --film "5,4,2" --people "17,65,32,2"
