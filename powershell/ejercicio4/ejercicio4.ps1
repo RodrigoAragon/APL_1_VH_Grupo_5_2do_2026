@@ -6,21 +6,8 @@
 
 <#
 .SYNOPSIS
-    Monitorea un directorio buscando archivos duplicados y los comprime.
-
-.DESCRIPTION
-    El script funciona como un demonio en segundo plano (job/proceso oculto) que utiliza 
-    FileSystemWatcher. Si encuentra un archivo con el mismo Hash MD5 que otro ya 
-    existente, lo comprime en formato ZIP y lo elimina.
-
-.PARAMETER directorio
-    Ruta del directorio a monitorear. Se aceptan rutas relativas y absolutas.
-
-.PARAMETER salida
-    Ruta del directorio en donde se van a crear los backups (.zip).
-
-.PARAMETER kill
-    Detiene el demonio previamente iniciado para ese directorio.
+    Monitorea un directorio buscando archivos duplicados y los comprime en ZIP.
+    Un archivo se considera duplicado si tiene el MISMO NOMBRE y el MISMO TAMAÑO.
 #>
 
 [CmdletBinding()]
@@ -38,7 +25,7 @@ param (
     [switch]$kill,
 
     [Parameter(Mandatory=$false)]
-    [switch]$daemon_mode # Parámetro de uso interno
+    [switch]$daemon_mode
 )
 
 # Convertir a rutas absolutas nativas
@@ -48,15 +35,13 @@ if (-not (Test-Path $directorio -PathType Container)) {
     exit
 }
 
-# Identificador único (se cambia char array a codificación UTF8 explícita)
 $bytes = [System.Text.Encoding]::UTF8.GetBytes($directorio)
 $hashDirectorio = (Get-FileHash -InputStream ([IO.MemoryStream]::new($bytes)) -Algorithm MD5).Hash
+$pidFile = Join-Path "/tmp" "demonio_ps_$hashDirectorio.pid"
 
 # ==============================================================================
 # Lógica de detención (-kill)
 # ==============================================================================
-$pidFile = Join-Path "/tmp" "demonio_ps_$hashDirectorio.pid"
-
 if ($kill) {
     if (Test-Path $pidFile) {
         $pidDemonio = Get-Content $pidFile
@@ -74,7 +59,6 @@ if ($kill) {
     exit
 }
 
-# Validar parámetro -salida que es obligatorio si no es -kill
 if ([string]::IsNullOrWhiteSpace($salida)) {
     Write-Error "El parámetro -salida es obligatorio para iniciar el monitoreo."
     exit
@@ -86,7 +70,7 @@ if (-not (Test-Path $salida)) {
 $salida = (Resolve-Path $salida).Path
 
 # ==============================================================================
-# Lógica de lanzamiento en 2do plano
+# Lógica de lanzamiento en 2do plano (Daemonización Segura)
 # ==============================================================================
 if (-not $daemon_mode) {
     if (Test-Path $pidFile) {
@@ -94,7 +78,7 @@ if (-not $daemon_mode) {
         if (-not [string]::IsNullOrWhiteSpace($pidExistente)) {
             $proceso = Get-Process -Id $pidExistente -ErrorAction SilentlyContinue
             if ($proceso) {
-                Write-Error "Ya existe un demonio ejecutándose para este directorio (PID $pidExistente)."
+                Write-Error "Ya existe un demonio ejecutándose (PID $pidExistente)."
                 exit
             }
         }
@@ -102,12 +86,9 @@ if (-not $daemon_mode) {
     }
 
     $scriptPath = $MyInvocation.MyCommand.Path
-    
-    # SOLUCIÓN: Usamos -Command y encapsulamos la ejecución completa en un string.
-    # El símbolo '&' le dice a PowerShell que ejecute la ruta como un script.
     $comando = "& '$scriptPath' -directorio '$directorio' -salida '$salida' -daemon_mode"
     
-    # Pasamos el array con -Command y nuestro string seguro
+    # Desconectamos flujos para liberar la terminal
     $proc = Start-Process pwsh -ArgumentList "-Command", $comando -RedirectStandardOutput "/dev/null" -RedirectStandardError "/tmp/demonio_errores_fondo.log" -PassThru
     $proc.Id | Out-File $pidFile -Force
     Write-Host "Demonio iniciado exitosamente en 2do plano (PID $($proc.Id))."
@@ -120,7 +101,7 @@ if (-not $daemon_mode) {
 $watcher = $null
 $tempFile = Join-Path "/tmp" "archivos_temp_$PID.txt"
 
-# 1. Empaquetamos nuestras variables para cruzarlas al universo paralelo (Runspace) del evento
+# Estado inyectado para el Runspace
 $estadoGlobal = @{
     Directorio = $directorio
     Salida     = $salida
@@ -135,7 +116,6 @@ try {
     $watcher.EnableRaisingEvents = $true
 
     $action = {
-        # 2. Desempaquetamos las variables desde $Event.MessageData
         $estado = $Event.MessageData
         $dirMonitoreo = $estado.Directorio
         $dirSalida = $estado.Salida
@@ -145,34 +125,40 @@ try {
         $ProgressPreference = 'SilentlyContinue'
         $pathNuevo = $Event.SourceEventArgs.FullPath
         
-        # Ahora el cerrojo sí existe y no causará un crash silencioso
-        if (-not $cerrojo.TryAdd($pathNuevo, 1)) {
-            return
-        }
+        if (-not $cerrojo.TryAdd($pathNuevo, 1)) { return }
 
         try {
-            Start-Sleep -Seconds 1 
+            # Espera activa: Aguardar a que Linux libere el archivo copiado
+            $liberado = $false
+            for ($i = 0; $i -lt 10; $i++) {
+                try {
+                    $stream = [System.IO.File]::Open($pathNuevo, 'Open', 'Read', 'None')
+                    $stream.Close()
+                    $liberado = $true
+                    break
+                } catch { Start-Sleep -Milliseconds 50 }
+            }
+            
+            if (-not $liberado) { return }
             
             if (Test-Path $pathNuevo -PathType Leaf) {
-                $hashNuevo = (Get-FileHash -Path $pathNuevo -Algorithm MD5 -ErrorAction Stop).Hash
+                # OBTENER NOMBRE Y TAMAÑO DEL ARCHIVO NUEVO
+                $infoNuevo = Get-Item -LiteralPath $pathNuevo -ErrorAction Stop
+                $nombreNuevo = $infoNuevo.Name
+                $tamanoNuevo = $infoNuevo.Length
                 
-                # Usamos $dirMonitoreo en lugar de $directorio
-                $archivos = Get-ChildItem -Path $dirMonitoreo -File -Recurse | Where-Object { $_.FullName -ne $pathNuevo }
+                # BUSCAR DUPLICADOS (MISMO NOMBRE Y TAMAÑO) EXCLUYENDO AL NUEVO
+                $archivos = Get-ChildItem -LiteralPath $dirMonitoreo -File -Recurse | Where-Object { $_.FullName -ne $pathNuevo }
                 
                 foreach ($archivo in $archivos) {
-                    $hashExistente = (Get-FileHash -Path $archivo.FullName -Algorithm MD5).Hash
-                    
-                    if ($hashNuevo -eq $hashExistente) {
+                    if ($archivo.Name -eq $nombreNuevo -and $archivo.Length -eq $tamanoNuevo) {
                         $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-                        # Usamos $dirSalida en lugar de $salida
                         $zipFile = Join-Path $dirSalida "$timestamp.zip"
                         
                         Compress-Archive -Path $pathNuevo -DestinationPath $zipFile -Force
                         
                         $logMsg = "[$timestamp] DUPLICADO: '$pathNuevo' es copia de '$($archivo.FullName)'. Archivado en $zipFile"
                         Add-Content -Path (Join-Path $dirSalida "demonio.log") -Value $logMsg
-                        
-                        # Usamos $archivoTemp
                         $logMsg | Out-File $archivoTemp -Append
                         
                         Remove-Item -Path $pathNuevo -Force
@@ -188,27 +174,17 @@ try {
         }
     }
 
-    # 3. Le inyectamos el estadoGlobal usando -MessageData a todos los eventos
     $eventJob1 = Register-ObjectEvent $watcher 'Created' -MessageData $estadoGlobal -Action $action
     $eventJob2 = Register-ObjectEvent $watcher 'Changed' -MessageData $estadoGlobal -Action $action
     $eventJob3 = Register-ObjectEvent $watcher 'Renamed' -MessageData $estadoGlobal -Action $action
 
-    while ($true) {
-        Start-Sleep -Seconds 5
-    }
+    while ($true) { Start-Sleep -Seconds 5 }
 
 } catch {
     $errorMsg = "[$((Get-Date).ToString())] ERROR CRÍTICO: $_"
     Add-Content -Path (Join-Path $salida "errores_demonio.log") -Value $errorMsg
 } finally {
-    if ($watcher) {
-        $watcher.EnableRaisingEvents = $false
-        $watcher.Dispose()
-    }
-    if (Test-Path $tempFile) {
-        Remove-Item $tempFile -Force
-    }
-    if (Test-Path $pidFile) {
-        Remove-Item $pidFile -Force
-    }
+    if ($watcher) { $watcher.EnableRaisingEvents = $false; $watcher.Dispose() }
+    if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
+    if (Test-Path $pidFile) { Remove-Item $pidFile -Force }
 }
