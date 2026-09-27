@@ -27,7 +27,7 @@ function mostrar_ayuda()
     echo "  -t, --trasponer   Indica operacion de trasponer."
     echo "  -p, --producto    Indica operacion de producto escalar."
     echo "  -h, --help        Muestra esta ayuda."
-    exit 1 #le pongo 1 pero no se si es mejor 0
+    exit 0
 }
 
 #bucle de parseo
@@ -66,6 +66,13 @@ do
             ;;
     esac
 done
+
+if [[ $# -ne 0 ]]
+then
+    echo "Se encontraron argumentos no reconocidos"
+    exit 1
+fi
+
 if [[ $matriz_arch == "" ]]
 then
     echo "Se debe enviar una ruta de archivo con la matriz"
@@ -89,6 +96,17 @@ fi
 if [[ $producto == true && $trasponer == true ]]
 then
     echo "Se debe enviar solo una operacion, producto o trasposicion"
+    exit 1
+fi
+#ver que el producto sea un numero
+if [[ ! "$producto_nro" =~ ^-?[0-9]+([.,][0-9]+)?$ ]]
+then
+    echo "El producto debe ser un numero"
+    exit 1
+fi
+if [[ ${#separador_ch} -ne 1 ]]
+then
+    echo "El separador debe ser un unico caracter"
     exit 1
 fi
 
@@ -121,12 +139,6 @@ do
     fi
 done < "$matriz_arch"
 
-
-if [ $? -ne 0 ]
-then
-    echo "El archivo de matriz es invalido"
-    exit 1
-fi
 #uso awk porque no encontre una forma mejor de hacerlo directamente en bash puro
 #recorre y en cada linea hace un for para ver cada campo, si el campo no tiene
 #el formato dado (puede empezar con -, tener 1 o mas valores numericos, coma o punto y 1 o mas numericos)
@@ -134,7 +146,7 @@ awk -F"${separador_ch}" '
     {
         for (i = 1; i <= NF; i++)
         {
-            if ($i !~ /^-?[0-9]+([.,][0-9]+)?$/)
+            if ($i !~ /^-?[0-9]+(\.[0-9]+)?$/)
             {
                 print "Error en linea " NR ", columna " i ": el valor \"" $i "\" no es numerico."
                 exit 1
@@ -153,6 +165,7 @@ fi
 #si pide producto
 #leer 1 por 1 y meter multiplicado en otro archivo
 #asumo q producto escalar se refiere a producto por un escalar
+nombreArchivo=$(basename "$matriz_arch")
 directorioGuardar=$(dirname "$matriz_arch")
 resultadoProducto=""
 if [[ $producto == true ]]
@@ -163,18 +176,22 @@ then
         filaAct=""
         for (( i=0; i<${#vec[*]}; i++))
         do
-            resultado=$(($producto_nro * ${vec[i]}))
+            #uso awk porque sino no puedo multiplicar si el valor de matriz es decimal en vez de entero
+            resultado=$(awk "BEGIN {print $producto_nro * ${vec[i]}}")
             if [[ $i -eq 0 ]]
             then
                 filaAct+="${resultado}"
             else
-                filaAct+="|${resultado}"
+                filaAct+="$separador_ch"
+                filaAct+="${resultado}"
             fi
         done
         resultadoProducto+="${filaAct}"$'\n'
     done < "$matriz_arch"
-    echo "$resultadoProducto" > "${directorioGuardar}/salida.${matriz_arch}"
-    echo "Resultado guardado en ${directorioGuardar}/salida.${matriz_arch}"
+    #sacar el ultimo \n asi no queda con 2 saltos de linea
+    resultadoProducto="${resultadoProducto%$'\n'}"
+    echo "$resultadoProducto" > "${directorioGuardar}/salida.${nombreArchivo}"
+    echo "Resultado guardado en ${directorioGuardar}/salida.${nombreArchivo}"
     exit 0
 fi
 
@@ -195,7 +212,8 @@ then
             then
                 filasNuevas[$i]="${vec[$i]}"
             else
-                filasNuevas[$i]+="|${vec[$i]}"
+                filasNuevas[$i]+="$separador_ch"
+                filasNuevas[$i]+="${vec[$i]}"
             fi
         done
         primeraLeida=false
@@ -206,6 +224,8 @@ for (( i=0; i<${#filasNuevas[*]}; i++))
 do
     filasUnidas+="${filasNuevas[$i]}"$'\n'
 done
-echo "$filasUnidas" > "${directorioGuardar}/salida.${matriz_arch}"
-echo "Resultado guardado en ${directorioGuardar}/salida.${matriz_arch}"
+#sacar el ultimo \n asi no queda con 2 saltos de linea
+filasUnidas="${filasUnidas%$'\n'}"
+echo "$filasUnidas" > "${directorioGuardar}/salida.${nombreArchivo}"
+echo "Resultado guardado en ${directorioGuardar}/salida.${nombreArchivo}"
 exit 0
