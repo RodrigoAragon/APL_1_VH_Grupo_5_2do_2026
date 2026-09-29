@@ -28,7 +28,7 @@ function mostrar_ayuda()
     echo "  -a, --archivo     Ruta del archivo JSON de salida."
     echo "  -p, --pantalla    Muestra la salida en consola."
     echo "  -h, --help        Muestra esta ayuda."
-    exit 1 #le pongo 1 pero no se si iria mejor 0
+    exit 0
 }
 
 function validarGanadores()
