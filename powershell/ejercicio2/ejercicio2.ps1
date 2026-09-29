@@ -69,7 +69,7 @@ if ($help -eq $true)
     write-host " -trasponer Realiza la trasposicion de la matriz."
     write-host " -separador Caracter utilizado para separar las columnas."
     write-host " -help Muestra esta ayuda."
-    exit 1
+    exit 0
 }
 if ($matriz -notmatch '\.txt$')
 {
