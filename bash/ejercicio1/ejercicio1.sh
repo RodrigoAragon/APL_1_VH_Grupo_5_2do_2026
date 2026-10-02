@@ -1,9 +1,9 @@
+#!/bin/bash
 # GRUPO 5
 # INTREGRANTES:
 #   ARAGON, RODRIGO EZEQUIEL
 #   ORFANO, NICOLAS
 #   VALENTE, MARTIN ALEJANDRO
-#!/bin/bash
 
 opciones=$(getopt -o d:a:ph --l directorio:,archivo:,pantalla,help -- "$@" 2> /dev/null)
 # si getopt falla sale con error
