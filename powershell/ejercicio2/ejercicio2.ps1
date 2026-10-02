@@ -1,8 +1,9 @@
 #GRUPO 5
-#INTREGRANTES:
-#ARAGON, RODRIGO EZEQUIEL
+#INTEGRANTES:
+#ARAGORN, RODRIGO EZEQUIEL
 #ORFANO, NICOLAS
-#VALENTE, MARTIN ALEJANDRO
+#VALENTE, MARTIN
+
 <#
 .Synopsis
     Procesa archivos de texto plano que contienen matrices para realizar operaciones de producto escalar o trasposición.
