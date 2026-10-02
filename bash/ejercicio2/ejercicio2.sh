@@ -1,9 +1,10 @@
+#!/bin/bash
 # GRUPO 5
 # INTREGRANTES:
 #   ARAGON, RODRIGO EZEQUIEL
 #   ORFANO, NICOLAS
 #   VALENTE, MARTIN ALEJANDRO
-#!/bin/bash
+
 
 opciones=$(getopt -o m:p:s:th --l matriz:,producto:,trasponer,separador:,help -- "$@" 2> /dev/null)
 # si getopt falla sale con error
