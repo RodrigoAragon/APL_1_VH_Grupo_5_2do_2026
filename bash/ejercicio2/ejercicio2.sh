@@ -5,7 +5,7 @@
 #   VALENTE, MARTIN ALEJANDRO
 #!/bin/bash
 
-opciones=$(getopt -o m:p:s:th --l matriz:,producto:,transponer,separador:,help -- "$@" 2> /dev/null)
+opciones=$(getopt -o m:p:s:th --l matriz:,producto:,trasponer,separador:,help -- "$@" 2> /dev/null)
 # si getopt falla sale con error
 if [ "$?" != "0" ]
 then
