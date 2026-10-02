@@ -25,7 +25,7 @@ function mostrar_ayuda()
 {
     echo "Uso: $0 -d <directorio> [-a <archivo> | -p]"
     echo "  -d, --directorio  Ruta del directorio con los archivos CSV."
-    echo "  -a, --archivo     Ruta del archivo JSON de salida."
+    echo "  -a, --archivo     Ruta del archivo JSON de salida (completo incluyendo el nombre de archivo)."
     echo "  -p, --pantalla    Muestra la salida en consola."
     echo "  -h, --help        Muestra esta ayuda."
     exit 0
