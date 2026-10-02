@@ -1,10 +1,11 @@
+#!/bin/bash
 # GRUPO 5
 # INTREGRANTES:
 #   ARAGON, RODRIGO EZEQUIEL
 #   ORFANO, NICOLAS
 #   VALENTE, MARTIN ALEJANDRO
 
-#!/bin/bash
+
 
 # ==============================================================================
 # Variables Globales
