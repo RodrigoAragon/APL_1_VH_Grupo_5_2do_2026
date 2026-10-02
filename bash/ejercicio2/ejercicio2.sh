@@ -23,7 +23,7 @@ function mostrar_ayuda()
 {
     echo "Uso: $0 -m <archivo> -s <caracter> [-t | -p <entero>]"
     echo "  -m, --matriz      Ruta del archivo matriz."
-    echo "  -s, --separador   Caracter que separa los valores en el archivo."
+    echo "  -s, --separador   Caracter que separa los valores en el archivo que contiene la matriz."
     echo "  -t, --trasponer   Indica operacion de trasponer."
     echo "  -p, --producto    Indica operacion de producto escalar."
     echo "  -h, --help        Muestra esta ayuda."
