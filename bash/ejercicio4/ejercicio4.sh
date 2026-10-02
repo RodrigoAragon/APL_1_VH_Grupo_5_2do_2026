@@ -18,10 +18,29 @@ SALIDA=""
 KILL_MODE=0
 DAEMON_MODE=0
 
+# Muestra la ayuda del script.
+mostrar_ayuda() {
+    echo '
+Uso:
+  ./ejercicio4.sh -d DIRECTORIO -s SALIDA
+  ./ejercicio4.sh -d DIRECTORIO -k
+
+Parametros:
+  -d, --directorio   Directorio a monitorear.
+  -s, --salida       Directorio donde se crean backups .tar.gz.
+  -k, --kill         Detiene el demonio iniciado para ese directorio.
+  -h, --help         Muestra esta ayuda.
+
+Requisito:
+  Para funcionar necesita tener instalado inotify-tools, que aporta inotifywait.'
+  exit 0
+}
+
 # Procesar parámetros
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--directorio) DIRECTORIO="$2"; shift 2 ;;
+        -h|--help) mostrar_ayuda; shift ;;
         -s|--salida) SALIDA="$2"; shift 2 ;;
         -k|--kill) KILL_MODE=1; shift ;;
         --daemon_mode) DAEMON_MODE=1; shift ;; # Interno
