@@ -209,7 +209,7 @@ if [[ $trasponer == true ]]
 then
     primeraLeida=true
     filasNuevas[0]=""
-    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]] # CORRECCIÓN: Se añade la condición para procesar la última línea sin salto en el bucle de transposición.
+    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]]
     do
         #en vec hay 1 linea sola pero puesta como elementos
         for (( i=0; i<${#vec[*]}; i++ ))
