@@ -4,8 +4,6 @@
 #   ARAGON, RODRIGO EZEQUIEL
 #   ORFANO, NICOLAS
 #   VALENTE, MARTIN ALEJANDRO
-
-
 opciones=$(getopt -o m:p:s:th --l matriz:,producto:,trasponer,separador:,help -- "$@" 2> /dev/null)
 # si getopt falla sale con error
 if [ "$?" != "0" ]
@@ -20,7 +18,7 @@ separador_ch=''
 producto=false
 trasponer=false
 separador=false
-function mostrar_ayuda() 
+function mostrar_ayuda()
 {
     echo "Uso: $0 -m <archivo> -s <caracter> [-t | -p <entero>]"
     echo "  -m, --matriz      Ruta del archivo matriz."
@@ -89,6 +87,18 @@ then
     echo "Se debe enviar un caracter separador para la matriz que no sea un -"
     exit 1
 fi
+#agregado para validar que el separador sea solo 1 caracter
+if [[ ${#separador_ch} -ne 1 ]]
+then
+    echo "El separador debe ser un unico caracter"
+    exit 1
+fi
+#agregado para validar si el separador tiene algun digito
+if [[ "$separador_ch" =~ ^[0-9]$ ]]
+then
+    echo "El separador no puede ser un digito"
+    exit 1
+fi
 if [[ $producto == false && $trasponer == false ]]
 then
     echo "Se debe enviar al menos una operacion, producto o trasposicion"
@@ -99,15 +109,11 @@ then
     echo "Se debe enviar solo una operacion, producto o trasposicion"
     exit 1
 fi
-#ver que el producto sea un numero
-if [[ ! "$producto_nro" =~ ^-?[0-9]+([.,][0-9]+)?$ ]]
+
+#ver que el producto sea un numero entero, corregido
+if [[ ! "$producto_nro" =~ ^-?[0-9]+$ ]]
 then
-    echo "El producto debe ser un numero"
-    exit 1
-fi
-if [[ ${#separador_ch} -ne 1 ]]
-then
-    echo "El separador debe ser un unico caracter"
+    echo "El producto debe ser un numero entero"
     exit 1
 fi
 
@@ -120,11 +126,10 @@ fi
 
 #ver la cantidad de elementos de la primer fila
 #meto todo en un vector con read
-#si la cantidad de elementos de otra fila != cantidad elementos primera
-#la matriz esta mal
 cantAnterior=0
 primeroLeido=true
-while IFS="$separador_ch" read -a vector
+#agregado para validar ultima linea aunque no tenga un salto de linea
+while IFS="$separador_ch" read -a vector || [[ -n "${vector[*]}" ]]
 do
     cantidadFilaAct=${#vector[*]}
     if [[ $primeroLeido == true ]]
@@ -171,7 +176,7 @@ directorioGuardar=$(dirname "$matriz_arch")
 resultadoProducto=""
 if [[ $producto == true ]]
 then
-    while IFS=$separador_ch read -a vec
+    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]] # CORRECCIÓN: Se añade la condición para procesar la última línea sin salto en el bucle de producto.
     do
         #en vec hay 1 linea sola pero puesta como elementos
         filaAct=""
@@ -204,7 +209,7 @@ if [[ $trasponer == true ]]
 then
     primeraLeida=true
     filasNuevas[0]=""
-    while IFS=$separador_ch read -a vec
+    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]] # CORRECCIÓN: Se añade la condición para procesar la última línea sin salto en el bucle de transposición.
     do
         #en vec hay 1 linea sola pero puesta como elementos
         for (( i=0; i<${#vec[*]}; i++ ))
@@ -222,7 +227,7 @@ then
 fi
 filasUnidas=""
 for (( i=0; i<${#filasNuevas[*]}; i++))
-do
+    do
     filasUnidas+="${filasNuevas[$i]}"$'\n'
 done
 #sacar el ultimo \n asi no queda con 2 saltos de linea

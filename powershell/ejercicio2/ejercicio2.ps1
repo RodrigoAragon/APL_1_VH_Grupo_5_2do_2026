@@ -45,9 +45,10 @@ Param
     [Parameter(Mandatory=$true, ParameterSetName="producto")]
     [Parameter(Mandatory=$true, ParameterSetName="trasponer")]
     [String]$matriz,
-
+    #lo toma como string para rechazarlo si es decimal, que no lo redondee
     [Parameter(Mandatory=$true, ParameterSetName="producto")]
-    [double]$producto,
+    [ValidatePattern('^-?[0-9]+$')] 
+    [String]$producto,
 
     [Parameter(Mandatory=$true, ParameterSetName="trasponer")]
     [switch]$trasponer,
@@ -91,6 +92,12 @@ if ((Test-Path -Path $matriz -PathType Leaf) -eq $false)
 #filas queda como un array donde en cada posicion hay 1 linea del archivo
 #get content separa por \n cada elemento
 $filas = Get-Content $matriz
+#agregado para validar si esta vacio
+if (-not $filas -or $filas.Length -eq 0)
+{
+    write-host "El archivo esta vacio"
+    exit 1
+}
 #separa la primer fila en cada componente, usando como separador el separador que se le paso
 #se usa [regex]::Escape($separador) para que de la forma de un caracter literal y no una expresion. EJ: el |
 $columnas = $filas[0] -split [regex]::Escape($separador)
@@ -127,6 +134,7 @@ foreach ($fila in $filas)
 #si pide producto
 if ($PSBoundParameters.ContainsKey("producto"))
 {
+    $prodInt = [int]$producto # Casteo seguro a entero ya validado
     $arch = ""
     foreach ($fila in $filas)
     {
@@ -134,28 +142,19 @@ if ($PSBoundParameters.ContainsKey("producto"))
         $colsLeidas = $fila -split [regex]::Escape($separador)
         foreach ($columna in $colsLeidas)
         {
-            $valor = ($columna -as [double]) * $producto
+            $valor = ($columna -as [double]) * $prodInt
             $filaStr += "${valor}$separador"
         }
-        #sacar ultimo elemento (el separador extra)
         $filaStr = $filaStr.TrimEnd([regex]::Escape($separador))
-        #agregar a arch con salto de linea
         $arch += "$filaStr`n"
     }
-    #crear nombre de arch de salida
-    #splith path separa en ruta al archivo y nombre
-    #con -leaf nos quedamos con el nombre del archivo
     $nombre = Split-Path $matriz -Leaf
-    #quedarnos directorio solo
     $directorio = Split-Path $matriz
-    #si el directorio es vacio pq se le mando el archivo como "matriz.txt" agregarle el .\
     if($directorio -eq "")
     {
         $directorio = ".\"
     }
-    #crear salida directorio + nuevo nombre arch
     $salida = Join-Path $directorio "salida.$nombre"
-    #sacar el ultimo \n pq set content lo agrega solo
     $arch = $arch.TrimEnd("`n")
     Set-Content $salida $arch
     exit 0
