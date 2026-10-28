@@ -176,7 +176,7 @@ directorioGuardar=$(dirname "$matriz_arch")
 resultadoProducto=""
 if [[ $producto == true ]]
 then
-    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]] # CORRECCIÓN: Se añade la condición para procesar la última línea sin salto en el bucle de producto.
+    while IFS=$separador_ch read -a vec || [[ -n "${vec[*]}" ]]
     do
         #en vec hay 1 linea sola pero puesta como elementos
         filaAct=""
