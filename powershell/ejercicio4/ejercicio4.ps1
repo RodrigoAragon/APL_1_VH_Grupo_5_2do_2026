@@ -10,34 +10,47 @@
     Un archivo se considera duplicado si tiene el MISMO NOMBRE y el MISMO TAMAÑO.
 #>
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName="inicio")]
 param (
     [Parameter(Mandatory=$true)]
     [Alias("d")]
+    [ValidateScript({
+        if (-not (Test-Path -LiteralPath $_ -PathType Container)) {
+            throw "El directorio a monitorear no existe."
+        }
+        $true
+    })]
     [string]$directorio,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true, ParameterSetName="inicio")]
     [Alias("s")]
+    [ValidateNotNullOrEmpty()]
+    [ValidateScript({
+        if ([string]::IsNullOrWhiteSpace($_)) {
+            throw "El directorio de salida no puede estar vacio."
+        }
+        if ((Test-Path -LiteralPath $_) -and -not (Test-Path -LiteralPath $_ -PathType Container)) {
+            throw "La salida debe ser un directorio."
+        }
+        $true
+    })]
     [string]$salida,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true, ParameterSetName="detencion")]
     [Alias("k")]
     [switch]$kill,
 
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$false, ParameterSetName="inicio")]
     [switch]$daemon_mode
 )
 
 # Convertir a rutas absolutas nativas
-$directorio = (Resolve-Path $directorio -ErrorAction Stop).Path
-if (-not (Test-Path $directorio -PathType Container)) {
-    Write-Error "El directorio a monitorear no existe."
-    exit
-}
+$directorio = (Resolve-Path -LiteralPath $directorio -ErrorAction Stop).Path
 
 $bytes = [System.Text.Encoding]::UTF8.GetBytes($directorio)
 $hashDirectorio = (Get-FileHash -InputStream ([IO.MemoryStream]::new($bytes)) -Algorithm MD5).Hash
 $pidFile = Join-Path "/tmp" "demonio_ps_$hashDirectorio.pid"
+$errorFile = Join-Path "/tmp" "demonio_errores_fondo_$hashDirectorio.log"
 
 # ==============================================================================
 # Lógica de detención (-kill)
@@ -45,29 +58,38 @@ $pidFile = Join-Path "/tmp" "demonio_ps_$hashDirectorio.pid"
 if ($kill) {
     if (Test-Path $pidFile) {
         $pidDemonio = Get-Content $pidFile
+        $proceso = Get-Process -Id $pidDemonio -ErrorAction SilentlyContinue
         try {
-            Stop-Process -Id $pidDemonio -Force -ErrorAction Stop
-            Remove-Item $pidFile -Force
-            Write-Host "Demonio (PID $pidDemonio) para el directorio '$directorio' detenido exitosamente."
-        } catch {
-            Remove-Item $pidFile -Force
-            Write-Host "El proceso ya no estaba en ejecución. Se limpiaron los rastros."
+            if ($proceso) {
+                Stop-Process -InputObject $proceso -Force -ErrorAction Stop
+                $proceso.WaitForExit()
+                Write-Host "Demonio (PID $pidDemonio) para el directorio '$directorio' detenido exitosamente."
+            } else {
+                Write-Host "El proceso ya no estaba en ejecución. Se limpiaron los rastros."
+            }
+        } finally {
+            # Se asegura la eliminación de TODOS los archivos temporales vinculados al PID
+            Remove-Item -LiteralPath (Join-Path "/tmp" "archivos_temp_$pidDemonio.txt"), $errorFile, $pidFile -Force -ErrorAction SilentlyContinue
         }
     } else {
+        Remove-Item -LiteralPath $errorFile -Force -ErrorAction SilentlyContinue
         Write-Host "No hay ningún demonio ejecutándose para ese directorio."
     }
     exit
 }
 
-if ([string]::IsNullOrWhiteSpace($salida)) {
-    Write-Error "El parámetro -salida es obligatorio para iniciar el monitoreo."
-    exit
+# ==============================================================================
+# Preparación del directorio de salida (Solo en modo inicio)
+# ==============================================================================
+if (-not (Test-Path -LiteralPath $salida)) {
+    try {
+        New-Item -ItemType Directory -Path $salida -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Error "No se pudo crear el directorio de salida '$salida': $_"
+        exit 1
+    }
 }
-
-if (-not (Test-Path $salida)) {
-    New-Item -ItemType Directory -Path $salida | Out-Null
-}
-$salida = (Resolve-Path $salida).Path
+$salida = (Resolve-Path -LiteralPath $salida).Path
 
 # ==============================================================================
 # Lógica de lanzamiento en 2do plano (Daemonización Segura)
@@ -79,7 +101,7 @@ if (-not $daemon_mode) {
             $proceso = Get-Process -Id $pidExistente -ErrorAction SilentlyContinue
             if ($proceso) {
                 Write-Error "Ya existe un demonio ejecutándose (PID $pidExistente)."
-                exit
+                exit 1
             }
         }
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
@@ -89,7 +111,7 @@ if (-not $daemon_mode) {
     $comando = "& '$scriptPath' -directorio '$directorio' -salida '$salida' -daemon_mode"
     
     # Desconectamos flujos para liberar la terminal
-    $proc = Start-Process pwsh -ArgumentList "-Command", $comando -RedirectStandardOutput "/dev/null" -RedirectStandardError "/tmp/demonio_errores_fondo.log" -PassThru
+    $proc = Start-Process pwsh -ArgumentList "-Command", $comando -RedirectStandardOutput "/dev/null" -RedirectStandardError $errorFile -PassThru
     $proc.Id | Out-File $pidFile -Force
     Write-Host "Demonio iniciado exitosamente en 2do plano (PID $($proc.Id))."
     exit
@@ -185,6 +207,13 @@ try {
     Add-Content -Path (Join-Path $salida "errores_demonio.log") -Value $errorMsg
 } finally {
     if ($watcher) { $watcher.EnableRaisingEvents = $false; $watcher.Dispose() }
+    foreach ($job in @($eventJob1, $eventJob2, $eventJob3)) {
+        if ($job) {
+            Unregister-Event -SourceIdentifier $job.Name -ErrorAction SilentlyContinue
+            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        }
+    }
     if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
+    Remove-Item -LiteralPath $errorFile -Force -ErrorAction SilentlyContinue
     if (Test-Path $pidFile) { Remove-Item $pidFile -Force }
 }
