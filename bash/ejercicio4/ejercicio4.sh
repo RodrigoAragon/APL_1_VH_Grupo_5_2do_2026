@@ -53,6 +53,11 @@ if [[ -z "$DIRECTORIO" ]]; then
     exit 1
 fi
 
+if [[ $KILL_MODE -eq 1 && -n "$SALIDA" ]]; then
+    echo "Error: El parámetro -k no se puede usar junto con -s." >&2
+    exit 1
+fi
+
 # Convertir a ruta absoluta
 if [[ ! -d "$DIRECTORIO" ]]; then
     echo "Error: El directorio a monitorear no existe: $DIRECTORIO" >&2
